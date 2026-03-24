@@ -252,17 +252,28 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
     def _detect_media_type(self) -> str:
         """Detect the right media_content_type for the target player.
 
-        Cast and DLNA players expect a MIME type, while androidtv and
-        most other integrations expect the HA-level ``music`` type.
+        Each integration has its own accepted media types:
+        - cast: "audio/mp3"
+        - dlna_dmr: "audio/mpeg"
+        - androidtv_remote: "url"
+        - others: "music"
         """
         registry = er.async_get(self.hass)
         entry = registry.async_get(self._target_entity_id)
         platform = entry.platform if entry else ""
-        if platform in ("cast", "dlna_dmr", "forked_daapd", "squeezebox"):
-            _LOGGER.debug("Target %s platform=%s → audio/mpeg", self._target_entity_id, platform)
-            return "audio/mpeg"
-        _LOGGER.debug("Target %s platform=%s → music", self._target_entity_id, platform)
-        return "music"
+        media_type_map = {
+            "cast": "audio/mp3",
+            "dlna_dmr": "audio/mpeg",
+            "forked_daapd": "audio/mpeg",
+            "squeezebox": "audio/mpeg",
+            "androidtv_remote": "url",
+        }
+        result = media_type_map.get(platform, "music")
+        _LOGGER.debug(
+            "Target %s platform=%s → %s",
+            self._target_entity_id, platform, result,
+        )
+        return result
 
     async def _play_on_target(self, url: str) -> None:
         """Send play_media to the target player."""
