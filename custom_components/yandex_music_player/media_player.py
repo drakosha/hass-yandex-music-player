@@ -249,6 +249,11 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
 
     async def _play_on_target(self, url: str) -> None:
         """Send play_media to the target player."""
+        _LOGGER.debug(
+            "Sending play_media to %s, url=%s…",
+            self._target_entity_id,
+            url[:80],
+        )
         self._advancing = True
         try:
             await self.hass.services.async_call(
@@ -257,7 +262,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 {
                     "entity_id": self._target_entity_id,
                     "media_content_id": url,
-                    "media_content_type": "music",
+                    "media_content_type": "audio/mpeg",
                 },
                 blocking=True,
             )

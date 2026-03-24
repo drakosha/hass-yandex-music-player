@@ -233,7 +233,14 @@ class PlayQueue:
         """Ensure the track has a valid URL."""
         if not item.url:
             url = await self._api.get_track_url(item.track_id)
-            item.url = url
+            if url:
+                item.url = url
+            else:
+                _LOGGER.warning(
+                    "Failed to get URL for track %s (%s)",
+                    item.track_id,
+                    item.title,
+                )
 
     async def prefetch_next(self) -> None:
         """Pre-fetch URL for the next track."""

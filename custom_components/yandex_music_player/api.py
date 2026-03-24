@@ -71,12 +71,24 @@ class YandexMusicAPI:
                 best = candidates[-1]  # lowest available
 
             if best and best.direct_link:
+                _LOGGER.debug(
+                    "Got direct_link for track %s (codec=%s, bitrate=%s)",
+                    track_id,
+                    best.codec,
+                    best.bitrate_in_kbps,
+                )
                 return best.direct_link
 
             # Fallback: construct URL manually
             if best:
+                _LOGGER.debug(
+                    "No direct_link, building URL for track %s", track_id
+                )
                 return await self._build_download_url(best)
 
+            _LOGGER.warning(
+                "No download info candidates for track %s", track_id
+            )
             return None
         except Exception:
             _LOGGER.exception("Failed to get track URL for %s", track_id)
