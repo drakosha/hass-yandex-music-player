@@ -18,6 +18,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_IDLE, STATE_PAUSED, STATE_PLAYING
 from homeassistant.core import HomeAssistant, callback, Event
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -102,6 +103,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         self._queue = PlayQueue(api)
 
         self._attr_unique_id = f"ym_player_{entry_id}"
+        self._target_media_type = self._detect_media_type()
 
         # State tracking
         self._state = MediaPlayerState.IDLE
@@ -247,11 +249,27 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             self._state = MediaPlayerState.IDLE
             self.async_write_ha_state()
 
+    def _detect_media_type(self) -> str:
+        """Detect the right media_content_type for the target player.
+
+        Cast and DLNA players expect a MIME type, while androidtv and
+        most other integrations expect the HA-level ``music`` type.
+        """
+        registry = er.async_get(self.hass)
+        entry = registry.async_get(self._target_entity_id)
+        platform = entry.platform if entry else ""
+        if platform in ("cast", "dlna_dmr", "forked_daapd", "squeezebox"):
+            _LOGGER.debug("Target %s platform=%s → audio/mpeg", self._target_entity_id, platform)
+            return "audio/mpeg"
+        _LOGGER.debug("Target %s platform=%s → music", self._target_entity_id, platform)
+        return "music"
+
     async def _play_on_target(self, url: str) -> None:
         """Send play_media to the target player."""
         _LOGGER.debug(
-            "Sending play_media to %s, url=%s…",
+            "Sending play_media to %s, type=%s, url=%s…",
             self._target_entity_id,
+            self._target_media_type,
             url[:80],
         )
         self._advancing = True
@@ -262,7 +280,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 {
                     "entity_id": self._target_entity_id,
                     "media_content_id": url,
-                    "media_content_type": "audio/mpeg",
+                    "media_content_type": self._target_media_type,
                 },
                 blocking=True,
             )
