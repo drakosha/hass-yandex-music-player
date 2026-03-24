@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Настройка Yandex Music Player",
+        "description": "Выберите целевой медиаплеер и аккаунт Яндекс.Станции для авторизации",
+        "data": {
+          "target_player": "Целевой плеер",
+          "yandex_station_entry": "Аккаунт Яндекс.Станции"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Этот плеер уже настроен",
+      "yandex_station_not_found": "Интеграция YandexStation не найдена. Сначала установите и настройте AlexxIT/YandexStation.",
+      "no_media_players": "Не найдено ни одного медиаплеера (кроме Яндекс.Станций)"
+    },
+    "error": {
+      "invalid_yandex_station": "Выбранный аккаунт YandexStation недоступен",
+      "invalid_player": "Выбранный плеер недоступен"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "yandex_music_player",
+  "name": "Yandex Music Player",
+  "version": "0.1.0",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["yandex_station"],
+  "documentation": "https://github.com/example/hass-yandex-music-player",
+  "iot_class": "cloud_polling",
+  "requirements": ["yandex-music>=2.2.0"],
+  "issue_tracker": "https://github.com/example/hass-yandex-music-player/issues"
+}

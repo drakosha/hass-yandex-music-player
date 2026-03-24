@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yandex Music Player Setup",
+        "description": "Select target media player and YandexStation account for authentication",
+        "data": {
+          "target_player": "Target player",
+          "yandex_station_entry": "YandexStation account"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This player is already configured",
+      "yandex_station_not_found": "YandexStation integration not found. Install and configure AlexxIT/YandexStation first.",
+      "no_media_players": "No media players found (excluding Yandex Stations)"
+    },
+    "error": {
+      "invalid_yandex_station": "Selected YandexStation account is unavailable",
+      "invalid_player": "Selected player is unavailable"
+    }
+  }
+}
