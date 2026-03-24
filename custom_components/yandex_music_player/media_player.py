@@ -227,7 +227,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             and self._state == MediaPlayerState.PLAYING
             and not self._advancing
         ):
-            self.hass.create_task(self._on_track_finished())
+            self.hass.async_create_task(self._on_track_finished())
 
         # Sync volume from target
         if new_state.attributes.get("volume_level") is not None:
@@ -271,10 +271,10 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             await self._play_on_target(item.url)
             self._state = MediaPlayerState.PLAYING
             # Pre-fetch next
-            self.hass.create_task(self._queue.prefetch_next())
+            self.hass.async_create_task(self._queue.prefetch_next())
             # Send radio feedback
             if self._queue.is_radio and self._queue._radio_station:
-                self.hass.create_task(
+                self.hass.async_create_task(
                     self._api.send_radio_started(
                         self._queue._radio_station, item.track_id
                     )
@@ -318,7 +318,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 if item and item.url:
                     await self._play_on_target(item.url)
                     self._state = MediaPlayerState.PLAYING
-                    self.hass.create_task(self._queue.prefetch_next())
+                    self.hass.async_create_task(self._queue.prefetch_next())
 
         elif media_type == MEDIA_TYPE_ALBUM:
             tracks = await self._api.get_album_tracks(media_id)
@@ -328,7 +328,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 if item and item.url:
                     await self._play_on_target(item.url)
                     self._state = MediaPlayerState.PLAYING
-                    self.hass.create_task(self._queue.prefetch_next())
+                    self.hass.async_create_task(self._queue.prefetch_next())
 
         elif media_type == MEDIA_TYPE_ARTIST:
             tracks = await self._api.get_artist_tracks(media_id)
@@ -338,7 +338,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 if item and item.url:
                     await self._play_on_target(item.url)
                     self._state = MediaPlayerState.PLAYING
-                    self.hass.create_task(self._queue.prefetch_next())
+                    self.hass.async_create_task(self._queue.prefetch_next())
 
         elif media_type == MEDIA_TYPE_RADIO:
             await self._queue.load_radio(media_id)
@@ -347,7 +347,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 await self._play_on_target(item.url)
                 self._state = MediaPlayerState.PLAYING
                 if self._queue._radio_station:
-                    self.hass.create_task(
+                    self.hass.async_create_task(
                         self._api.send_radio_started(
                             self._queue._radio_station, item.track_id
                         )

@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import YandexMusicAPI
 from .const import CONF_YANDEX_STATION_ENTRY, DOMAIN, YANDEX_STATION_DOMAIN
@@ -69,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     # Extract the music token from YandexStation session
-    token = await _get_music_token(quasar)
+    token = await _get_music_token(hass, quasar)
     if not token:
         raise ConfigEntryNotReady(
             "Could not obtain Yandex Music token from YandexStation"
@@ -111,7 +112,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def _get_music_token(quasar) -> str | None:
+async def _get_music_token(hass: HomeAssistant, quasar) -> str | None:
     """Extract or obtain a Yandex Music token from YandexStation's quasar.
 
     YandexStation's session stores auth data that we can use to get
@@ -134,7 +135,7 @@ async def _get_music_token(quasar) -> str | None:
     # Try 2: x_token → exchange for music token via OAuth
     x_token = getattr(session, "x_token", None)
     if x_token:
-        token = await _exchange_x_token_for_music(session, x_token)
+        token = await _exchange_x_token_for_music(hass, session, x_token)
         if token:
             return token
 
@@ -148,7 +149,7 @@ async def _get_music_token(quasar) -> str | None:
 
     # Try 4: Use the session's cookies to get a music token
     if hasattr(session, "get") or hasattr(session, "session"):
-        token = await _get_token_via_session(session)
+        token = await _get_token_via_session(hass, session)
         if token:
             return token
 
@@ -160,10 +161,10 @@ async def _get_music_token(quasar) -> str | None:
     return None
 
 
-async def _exchange_x_token_for_music(session, x_token: str) -> str | None:
+async def _exchange_x_token_for_music(
+    hass: HomeAssistant, session, x_token: str
+) -> str | None:
     """Exchange x_token for a Yandex Music OAuth token."""
-    import aiohttp
-
     try:
         # Standard Yandex OAuth token exchange
         data = {
@@ -172,29 +173,31 @@ async def _exchange_x_token_for_music(session, x_token: str) -> str | None:
             "client_secret": "53bc75238f0c4d08a118e51fe9203300",
             "access_token": x_token,
         }
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                "https://oauth.yandex.ru/token", data=data
-            ) as resp:
-                if resp.status == 200:
-                    result = await resp.json()
-                    token = result.get("access_token")
-                    if token:
-                        _LOGGER.debug("Got music token via x_token exchange")
-                        return token
-                else:
-                    text = await resp.text()
-                    _LOGGER.warning(
-                        "x_token exchange failed: %s %s",
-                        resp.status,
-                        text[:200],
-                    )
+        http = async_get_clientsession(hass)
+        async with http.post(
+            "https://oauth.yandex.ru/token", data=data
+        ) as resp:
+            if resp.status == 200:
+                result = await resp.json()
+                token = result.get("access_token")
+                if token:
+                    _LOGGER.debug("Got music token via x_token exchange")
+                    return token
+            else:
+                text = await resp.text()
+                _LOGGER.warning(
+                    "x_token exchange failed: %s %s",
+                    resp.status,
+                    text[:200],
+                )
     except Exception:
         _LOGGER.exception("Failed to exchange x_token")
     return None
 
 
-async def _get_token_via_session(session) -> str | None:
+async def _get_token_via_session(
+    hass: HomeAssistant, session
+) -> str | None:
     """Try to get a music token using the session's HTTP capabilities."""
     try:
         # YandexStation session may have a `get` method with auth
