@@ -8,12 +8,20 @@
           "target_player": "Target player",
           "yandex_station_entry": "YandexStation account"
         }
+      },
+      "reconfigure": {
+        "title": "Change target player",
+        "description": "Select a new media player for playback",
+        "data": {
+          "target_player": "Target player"
+        }
       }
     },
     "abort": {
       "already_configured": "This player is already configured",
       "yandex_station_not_found": "YandexStation integration not found. Install and configure AlexxIT/YandexStation first.",
-      "no_media_players": "No media players found (excluding Yandex Stations)"
+      "no_media_players": "No media players found (excluding Yandex Stations)",
+      "reconfigure_successful": "Target player changed successfully"
     },
     "error": {
       "invalid_yandex_station": "Selected YandexStation account is unavailable",

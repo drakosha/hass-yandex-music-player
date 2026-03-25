@@ -8,7 +8,7 @@ from typing import Any
 
 from yandex_music import ClientAsync, Track, Playlist, Album, Artist
 
-from .const import DEFAULT_BITRATE, DEFAULT_CODEC
+from .const import DEFAULT_BITRATE, DEFAULT_CODEC, LIKED_TRACKS_LIMIT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,15 +124,21 @@ class YandexMusicAPI:
 
     # ── Library ────────────────────────────────────────────────────
 
-    async def get_liked_tracks(self) -> list[Track]:
-        """Get liked tracks (full objects)."""
+    async def get_liked_tracks(
+        self, limit: int = LIKED_TRACKS_LIMIT
+    ) -> list[Track]:
+        """Get liked tracks (full objects) with batched fetching."""
         try:
             likes = await self.client.users_likes_tracks()
             if not likes:
                 return []
-            # Fetch full track objects in batches
-            track_ids = [f"{lt.track_id}" for lt in likes[:100]]
-            return await self.get_tracks(track_ids)
+            track_ids = [f"{lt.track_id}" for lt in likes[:limit]]
+            # Fetch in batches of 100 (API limit)
+            all_tracks: list[Track] = []
+            for i in range(0, len(track_ids), 100):
+                batch = await self.get_tracks(track_ids[i : i + 100])
+                all_tracks.extend(batch)
+            return all_tracks
         except Exception:
             _LOGGER.exception("Failed to get liked tracks")
             return []

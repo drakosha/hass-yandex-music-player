@@ -8,12 +8,20 @@
           "target_player": "Целевой плеер",
           "yandex_station_entry": "Аккаунт Яндекс.Станции"
         }
+      },
+      "reconfigure": {
+        "title": "Изменить целевой плеер",
+        "description": "Выберите новый медиаплеер для воспроизведения",
+        "data": {
+          "target_player": "Целевой плеер"
+        }
       }
     },
     "abort": {
       "already_configured": "Этот плеер уже настроен",
       "yandex_station_not_found": "Интеграция YandexStation не найдена. Сначала установите и настройте AlexxIT/YandexStation.",
-      "no_media_players": "Не найдено ни одного медиаплеера (кроме Яндекс.Станций)"
+      "no_media_players": "Не найдено ни одного медиаплеера (кроме Яндекс.Станций)",
+      "reconfigure_successful": "Целевой плеер успешно изменён"
     },
     "error": {
       "invalid_yandex_station": "Выбранный аккаунт YandexStation недоступен",

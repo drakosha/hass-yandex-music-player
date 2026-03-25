@@ -120,3 +120,42 @@ class YandexMusicPlayerConfigFlow(
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Handle reconfiguration to change target player."""
+        errors = {}
+        entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+
+        players = _get_media_players(self.hass)
+        if not players:
+            return self.async_abort(reason="no_media_players")
+
+        if user_input is not None:
+            new_target = user_input[CONF_TARGET_PLAYER]
+            if new_target not in players:
+                errors["base"] = "invalid_player"
+            else:
+                new_data = {**entry.data, CONF_TARGET_PLAYER: new_target}
+                self.hass.config_entries.async_update_entry(
+                    entry, data=new_data
+                )
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reconfigure_successful")
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_TARGET_PLAYER,
+                    default=entry.data.get(CONF_TARGET_PLAYER),
+                ): vol.In(players),
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            errors=errors,
+        )

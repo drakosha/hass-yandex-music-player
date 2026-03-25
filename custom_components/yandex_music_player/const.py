@@ -32,6 +32,7 @@ REPEAT_ALL = "all"
 DEFAULT_CODEC = "mp3"
 DEFAULT_BITRATE = 192
 URL_REFRESH_MARGIN = 30  # seconds before URL expiry to refresh
+LIKED_TRACKS_LIMIT = 500
 
 # Events
 EVENT_QUEUE_UPDATED = f"{DOMAIN}_queue_updated"

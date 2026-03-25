@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -111,10 +111,11 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         self._state = MediaPlayerState.IDLE
         self._volume: float = 0.5
         self._muted: bool = False
-        self._target_was_playing: bool = False
         self._unsub_state: Any = None
         self._unsub_poll: Any = None
         self._advancing: bool = False
+        self._media_position: float | None = None
+        self._media_position_updated_at: datetime | None = None
 
     @property
     def state(self) -> MediaPlayerState:
@@ -167,6 +168,14 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         return item.duration if item else None
 
     @property
+    def media_position(self) -> float | None:
+        return self._media_position
+
+    @property
+    def media_position_updated_at(self) -> datetime | None:
+        return self._media_position_updated_at
+
+    @property
     def media_image_url(self) -> str | None:
         item = self._queue.current
         return item.image_url if item else None
@@ -202,6 +211,18 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         self._unsub_state = async_track_state_change_event(
             self.hass, self._target_entity_id, self._on_target_state_change
         )
+        self._unsub_poll = async_track_time_interval(
+            self.hass, self._poll_position, POLL_INTERVAL
+        )
+        # Sync volume from target player at startup
+        target_state = self.hass.states.get(self._target_entity_id)
+        if target_state:
+            vol = target_state.attributes.get("volume_level")
+            if vol is not None:
+                self._volume = vol
+            muted = target_state.attributes.get("is_volume_muted")
+            if muted is not None:
+                self._muted = muted
         # Auto-start "Моя волна" so there's something to play immediately
         self.hass.async_create_task(self._auto_start_my_wave())
 
@@ -213,6 +234,28 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             self.async_write_ha_state()
         except Exception:
             _LOGGER.debug("Failed to auto-load My Wave", exc_info=True)
+
+    @callback
+    def _poll_position(self, now=None) -> None:
+        """Poll target player position and detect track end."""
+        if self._state != MediaPlayerState.PLAYING:
+            return
+        target = self.hass.states.get(self._target_entity_id)
+        if not target:
+            return
+        pos = target.attributes.get("media_position")
+        updated_at = target.attributes.get("media_position_updated_at")
+        if pos is not None:
+            self._media_position = pos
+        if updated_at is not None:
+            self._media_position_updated_at = updated_at
+        # Detect track end via position >= duration
+        duration = self.media_duration
+        if duration and pos is not None and pos >= duration - 2:
+            if not self._advancing:
+                self.hass.async_create_task(self._on_track_finished())
+                return
+        self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up subscriptions."""
@@ -244,12 +287,17 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         ):
             self.hass.async_create_task(self._on_track_finished())
 
-        # Sync volume from target
+        # Sync volume and position from target
         if new_state.attributes.get("volume_level") is not None:
             self._volume = new_state.attributes["volume_level"]
-
         if new_state.attributes.get("is_volume_muted") is not None:
             self._muted = new_state.attributes["is_volume_muted"]
+        if new_state.attributes.get("media_position") is not None:
+            self._media_position = new_state.attributes["media_position"]
+        if new_state.attributes.get("media_position_updated_at") is not None:
+            self._media_position_updated_at = new_state.attributes[
+                "media_position_updated_at"
+            ]
 
         self.async_write_ha_state()
 
@@ -315,15 +363,46 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         finally:
             self._advancing = False
 
+    async def _play_current_or_skip(self) -> bool:
+        """Play current queue item, skipping tracks with no URL.
+
+        Returns True if playback started, False if queue exhausted.
+        """
+        max_skips = 5
+        for attempt in range(max_skips):
+            item = self._queue.current if attempt == 0 else await self._queue.next()
+            if not item:
+                return False
+            if item.url:
+                await self._play_on_target(item.url)
+                self._state = MediaPlayerState.PLAYING
+                self._media_position = 0
+                self._media_position_updated_at = datetime.now(timezone.utc)
+                self.hass.async_create_task(self._queue.prefetch_next())
+                if self._queue.is_radio and self._queue._radio_station:
+                    self.hass.async_create_task(
+                        self._api.send_radio_started(
+                            self._queue._radio_station, item.track_id
+                        )
+                    )
+                return True
+            _LOGGER.warning("Skipping track %s: no URL", item.title)
+        _LOGGER.error("Skipped %d tracks in a row, stopping", max_skips)
+        return False
+
     async def _advance_to_next(self) -> None:
         """Advance to the next track and play it."""
         item = await self._queue.next()
-        if item and item.url:
+        if not item:
+            self._state = MediaPlayerState.IDLE
+            self.async_write_ha_state()
+            return
+        if item.url:
             await self._play_on_target(item.url)
             self._state = MediaPlayerState.PLAYING
-            # Pre-fetch next
+            self._media_position = 0
+            self._media_position_updated_at = datetime.now(timezone.utc)
             self.hass.async_create_task(self._queue.prefetch_next())
-            # Send radio feedback
             if self._queue.is_radio and self._queue._radio_station:
                 self.hass.async_create_task(
                     self._api.send_radio_started(
@@ -331,7 +410,10 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                     )
                 )
         else:
-            self._state = MediaPlayerState.IDLE
+            _LOGGER.warning("Skipping track %s: no URL", item.title)
+            # Try to skip to next playable track
+            if not await self._play_current_or_skip():
+                self._state = MediaPlayerState.IDLE
         self.async_write_ha_state()
 
     # ── Media Player Controls ──────────────────────────────────────
@@ -345,18 +427,14 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         """Play media from Yandex Music."""
         _LOGGER.debug("play_media: type=%s id=%s", media_type, media_id)
 
+        loaded = False
         if media_type in (MEDIA_TYPE_TRACK, MEDIA_TYPE_YANDEX):
-            # Single track
             track = await self._api.get_track(media_id)
             if track:
                 await self._queue.load_tracks([track])
-                item = self._queue.current
-                if item and item.url:
-                    await self._play_on_target(item.url)
-                    self._state = MediaPlayerState.PLAYING
+                loaded = True
 
         elif media_type == MEDIA_TYPE_PLAYLIST:
-            # Playlist: owner_uid:playlist_id
             parts = media_id.split(":", 1)
             if len(parts) == 2:
                 owner_uid, playlist_id = parts
@@ -365,44 +443,27 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             tracks = await self._api.get_playlist_tracks(playlist_id, owner_uid)
             if tracks:
                 await self._queue.load_tracks(tracks)
-                item = self._queue.current
-                if item and item.url:
-                    await self._play_on_target(item.url)
-                    self._state = MediaPlayerState.PLAYING
-                    self.hass.async_create_task(self._queue.prefetch_next())
+                loaded = True
 
         elif media_type == MEDIA_TYPE_ALBUM:
             tracks = await self._api.get_album_tracks(media_id)
             if tracks:
                 await self._queue.load_tracks(tracks)
-                item = self._queue.current
-                if item and item.url:
-                    await self._play_on_target(item.url)
-                    self._state = MediaPlayerState.PLAYING
-                    self.hass.async_create_task(self._queue.prefetch_next())
+                loaded = True
 
         elif media_type == MEDIA_TYPE_ARTIST:
             tracks = await self._api.get_artist_tracks(media_id)
             if tracks:
                 await self._queue.load_tracks(tracks)
-                item = self._queue.current
-                if item and item.url:
-                    await self._play_on_target(item.url)
-                    self._state = MediaPlayerState.PLAYING
-                    self.hass.async_create_task(self._queue.prefetch_next())
+                loaded = True
 
         elif media_type == MEDIA_TYPE_RADIO:
             await self._queue.load_radio(media_id)
-            item = self._queue.current
-            if item and item.url:
-                await self._play_on_target(item.url)
-                self._state = MediaPlayerState.PLAYING
-                if self._queue._radio_station:
-                    self.hass.async_create_task(
-                        self._api.send_radio_started(
-                            self._queue._radio_station, item.track_id
-                        )
-                    )
+            loaded = True
+
+        if loaded:
+            if not await self._play_current_or_skip():
+                self._state = MediaPlayerState.IDLE
 
         self.async_write_ha_state()
 
