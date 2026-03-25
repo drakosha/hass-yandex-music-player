@@ -171,26 +171,32 @@ class YandexMusicAPI:
             return []
 
     async def get_liked_albums(self) -> list[Album]:
-        """Get liked albums."""
+        """Get liked albums (from likes API + extracted from liked tracks)."""
         try:
+            album_ids: list[int] = []
+
+            # Try the dedicated likes API first
             likes = await self.client.users_likes_albums()
-            if not likes:
-                _LOGGER.debug("users_likes_albums returned empty")
-                return []
-            _LOGGER.debug(
-                "Liked albums: %d items, first=%s",
-                len(likes),
-                type(likes[0]).__name__,
-            )
-            album_ids = []
-            for la in likes[:50]:
-                album = getattr(la, "album", None)
-                aid = getattr(album, "id", None) if album else getattr(la, "id", None)
-                if aid:
-                    album_ids.append(aid)
+            if likes:
+                for la in likes[:50]:
+                    album = getattr(la, "album", None)
+                    aid = getattr(album, "id", None) if album else getattr(la, "id", None)
+                    if aid:
+                        album_ids.append(aid)
+
+            # If empty, extract unique albums from liked tracks
+            if not album_ids:
+                tracks = await self.get_liked_tracks(limit=100)
+                seen = set()
+                for track in tracks:
+                    for album in track.albums or []:
+                        if album.id and album.id not in seen:
+                            album_ids.append(album.id)
+                            seen.add(album.id)
+
             if not album_ids:
                 return []
-            albums = await self.client.albums(album_ids)
+            albums = await self.client.albums(album_ids[:50])
             return albums or []
         except Exception:
             _LOGGER.exception("Failed to get liked albums")
@@ -211,34 +217,27 @@ class YandexMusicAPI:
             return []
 
     async def get_liked_artists(self) -> list[Artist]:
-        """Get liked artists."""
+        """Get liked artists (from likes API + extracted from liked tracks)."""
         try:
+            artists_map: dict[int, Artist] = {}
+
+            # Try the dedicated likes API first
             likes = await self.client.users_likes_artists()
-            if not likes:
-                _LOGGER.debug("users_likes_artists returned empty")
-                return []
-            _LOGGER.debug(
-                "Liked artists: %d items, first=%s",
-                len(likes),
-                type(likes[0]).__name__,
-            )
-            artists = []
-            for la in likes[:50]:
-                artist = getattr(la, "artist", None)
-                if artist is None:
-                    # Object might be the artist itself
-                    artist = la
-                if hasattr(artist, "name") and artist.name:
-                    artists.append(artist)
-                elif hasattr(artist, "id"):
-                    # Minimal object — fetch full artist
-                    try:
-                        full = await self.client.artists([artist.id])
-                        if full:
-                            artists.append(full[0])
-                    except Exception:
-                        pass
-            return artists
+            if likes:
+                for la in likes[:50]:
+                    artist = getattr(la, "artist", None) or la
+                    if hasattr(artist, "name") and artist.name:
+                        artists_map[artist.id] = artist
+
+            # If empty, extract unique artists from liked tracks
+            if not artists_map:
+                tracks = await self.get_liked_tracks(limit=100)
+                for track in tracks:
+                    for artist in track.artists or []:
+                        if artist.id and artist.name and artist.id not in artists_map:
+                            artists_map[artist.id] = artist
+
+            return list(artists_map.values())[:50]
         except Exception:
             _LOGGER.exception("Failed to get liked artists")
             return []
