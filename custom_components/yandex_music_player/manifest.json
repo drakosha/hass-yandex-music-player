@@ -1,7 +1,7 @@
 {
   "domain": "yandex_music_player",
   "name": "Yandex Music Player",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["yandex_station"],
