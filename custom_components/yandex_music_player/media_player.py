@@ -33,6 +33,7 @@ from .const import (
     MEDIA_TYPE_ARTIST,
     MEDIA_TYPE_PLAYLIST,
     MEDIA_TYPE_RADIO,
+    MEDIA_TYPE_SEARCH,
     MEDIA_TYPE_TRACK,
     MEDIA_TYPE_YANDEX,
     REPEAT_ALL,
@@ -197,10 +198,21 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
     # ── Setup / Teardown ───────────────────────────────────────────
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to target player state changes."""
+        """Subscribe to target player state changes and auto-start My Wave."""
         self._unsub_state = async_track_state_change_event(
             self.hass, self._target_entity_id, self._on_target_state_change
         )
+        # Auto-start "Моя волна" so there's something to play immediately
+        self.hass.async_create_task(self._auto_start_my_wave())
+
+    async def _auto_start_my_wave(self) -> None:
+        """Load My Wave radio into the queue (without starting playback)."""
+        try:
+            await self._queue.load_radio("user:onyourwave")
+            _LOGGER.debug("Auto-loaded My Wave into queue")
+            self.async_write_ha_state()
+        except Exception:
+            _LOGGER.debug("Failed to auto-load My Wave", exc_info=True)
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up subscriptions."""
@@ -503,8 +515,22 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         media_content_type: str | None = None,
         media_content_id: str | None = None,
     ) -> BrowseMedia:
-        """Browse Yandex Music library."""
+        """Browse Yandex Music library.
+
+        When media_content_type is not one of our custom types but
+        media_content_id is set, treat it as a search query — this is
+        how HA's media browser forwards user search input.
+        """
         from .media_browser import async_browse_media
+
+        if (
+            media_content_type is not None
+            and media_content_id
+            and not media_content_type.startswith("ym_")
+        ):
+            return await async_browse_media(
+                self._api, MEDIA_TYPE_SEARCH, media_content_id
+            )
 
         return await async_browse_media(
             self._api, media_content_type, media_content_id

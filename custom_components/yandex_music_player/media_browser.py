@@ -18,6 +18,7 @@ from .const import (
     MEDIA_TYPE_LIBRARY,
     MEDIA_TYPE_PLAYLIST,
     MEDIA_TYPE_RADIO,
+    MEDIA_TYPE_SEARCH,
     MEDIA_TYPE_TRACK,
 )
 
@@ -53,6 +54,9 @@ async def async_browse_media(
 
     if media_content_type == MEDIA_TYPE_ARTIST:
         return await _build_artist_tracks(api, media_content_id)
+
+    if media_content_type == MEDIA_TYPE_SEARCH:
+        return await _build_search_results(api, media_content_id)
 
     return await _build_root(api)
 
@@ -338,6 +342,97 @@ async def _build_artist_tracks(
         media_content_id=artist_id,
         media_content_type=MEDIA_TYPE_ARTIST,
         can_play=True,
+        can_expand=True,
+        children=children,
+    )
+
+
+async def _build_search_results(
+    api: YandexMusicAPI, query: str
+) -> BrowseMedia:
+    """Build search results for a query."""
+    results = await api.search(query)
+    children: list[BrowseMedia] = []
+
+    # Artists
+    for artist in results.get("artists", [])[:10]:
+        cover = None
+        if hasattr(artist, "cover") and artist.cover:
+            if hasattr(artist.cover, "uri") and artist.cover.uri:
+                cover = f"https://{artist.cover.uri.replace('%%', '200x200')}"
+        children.append(
+            BrowseMedia(
+                title=artist.name or "Неизвестный",
+                media_class=MediaClass.ARTIST,
+                media_content_id=str(artist.id),
+                media_content_type=MEDIA_TYPE_ARTIST,
+                can_play=True,
+                can_expand=True,
+                thumbnail=cover,
+            )
+        )
+
+    # Albums
+    for album in results.get("albums", [])[:10]:
+        cover = None
+        if hasattr(album, "cover_uri") and album.cover_uri:
+            cover = f"https://{album.cover_uri.replace('%%', '200x200')}"
+        artists_str = ""
+        if hasattr(album, "artists") and album.artists:
+            artists_str = ", ".join(a.name for a in album.artists if a.name)
+        title = album.title or "Без названия"
+        if artists_str:
+            title = f"{artists_str} — {title}"
+        children.append(
+            BrowseMedia(
+                title=title,
+                media_class=MediaClass.ALBUM,
+                media_content_id=str(album.id),
+                media_content_type=MEDIA_TYPE_ALBUM,
+                can_play=True,
+                can_expand=True,
+                thumbnail=cover,
+            )
+        )
+
+    # Tracks
+    for track in results.get("tracks", [])[:10]:
+        children.append(
+            BrowseMedia(
+                title=track_title(track),
+                media_class=MediaClass.TRACK,
+                media_content_id=str(track.id),
+                media_content_type=MEDIA_TYPE_TRACK,
+                can_play=True,
+                can_expand=False,
+                thumbnail=track_image_url(track),
+            )
+        )
+
+    # Playlists
+    for pl in results.get("playlists", [])[:5]:
+        cover = None
+        if hasattr(pl, "cover") and pl.cover:
+            if hasattr(pl.cover, "uri") and pl.cover.uri:
+                cover = f"https://{pl.cover.uri.replace('%%', '200x200')}"
+        children.append(
+            BrowseMedia(
+                title=pl.title or "Без названия",
+                media_class=MediaClass.PLAYLIST,
+                media_content_id=f"{pl.uid}:{pl.kind}",
+                media_content_type=MEDIA_TYPE_PLAYLIST,
+                can_play=True,
+                can_expand=True,
+                thumbnail=cover,
+            )
+        )
+
+    return BrowseMedia(
+        title=f"Поиск: {query}",
+        media_class=MediaClass.DIRECTORY,
+        media_content_id=query,
+        media_content_type=MEDIA_TYPE_SEARCH,
+        can_play=False,
         can_expand=True,
         children=children,
     )
