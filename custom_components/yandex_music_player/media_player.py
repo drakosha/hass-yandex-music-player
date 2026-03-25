@@ -49,6 +49,7 @@ SUPPORT_FEATURES = (
     MediaPlayerEntityFeature.PLAY
     | MediaPlayerEntityFeature.PAUSE
     | MediaPlayerEntityFeature.STOP
+    | MediaPlayerEntityFeature.SEEK
     | MediaPlayerEntityFeature.NEXT_TRACK
     | MediaPlayerEntityFeature.PREVIOUS_TRACK
     | MediaPlayerEntityFeature.SHUFFLE_SET
@@ -499,6 +500,21 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             blocking=True,
         )
         self._state = MediaPlayerState.IDLE
+        self.async_write_ha_state()
+
+    async def async_media_seek(self, position: float) -> None:
+        """Seek to position on target player."""
+        await self.hass.services.async_call(
+            "media_player",
+            "media_seek",
+            {
+                "entity_id": self._target_entity_id,
+                "seek_position": position,
+            },
+            blocking=True,
+        )
+        self._media_position = position
+        self._media_position_updated_at = datetime.now(timezone.utc)
         self.async_write_ha_state()
 
     async def async_media_next_track(self) -> None:
