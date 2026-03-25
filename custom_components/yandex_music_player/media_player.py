@@ -49,7 +49,6 @@ SUPPORT_FEATURES = (
     MediaPlayerEntityFeature.PLAY
     | MediaPlayerEntityFeature.PAUSE
     | MediaPlayerEntityFeature.STOP
-    | MediaPlayerEntityFeature.SEEK
     | MediaPlayerEntityFeature.NEXT_TRACK
     | MediaPlayerEntityFeature.PREVIOUS_TRACK
     | MediaPlayerEntityFeature.SHUFFLE_SET
@@ -89,7 +88,6 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Yandex Music"
-    _attr_supported_features = SUPPORT_FEATURES
     _attr_media_content_type = "music"
 
     def __init__(
@@ -117,6 +115,16 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
         self._advancing: bool = False
         self._media_position: float | None = None
         self._media_position_updated_at: datetime | None = None
+
+    @property
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        features = SUPPORT_FEATURES
+        target = self.hass.states.get(self._target_entity_id)
+        if target:
+            tf = target.attributes.get("supported_features", 0)
+            if tf & MediaPlayerEntityFeature.SEEK:
+                features |= MediaPlayerEntityFeature.SEEK
+        return features
 
     @property
     def state(self) -> MediaPlayerState:
