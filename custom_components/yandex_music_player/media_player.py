@@ -39,6 +39,7 @@ from .const import (
     REPEAT_OFF,
     REPEAT_ONE,
 )
+from .proxy import generate_proxy_url
 from .queue import PlayQueue
 
 _LOGGER = logging.getLogger(__name__)
@@ -268,20 +269,24 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
             "squeezebox": "audio/mpeg",
             "androidtv_remote": "url",
         }
+        self._needs_proxy = platform in ("dlna_dmr",)
         result = media_type_map.get(platform, "music")
         _LOGGER.debug(
-            "Target %s platform=%s → %s",
-            self._target_entity_id, platform, result,
+            "Target %s platform=%s → %s (proxy=%s)",
+            self._target_entity_id, platform, result, self._needs_proxy,
         )
         return result
 
     async def _play_on_target(self, url: str) -> None:
         """Send play_media to the target player."""
+        play_url = url
+        if self._needs_proxy and url.startswith("https://"):
+            play_url = generate_proxy_url(self.hass, url)
         _LOGGER.debug(
             "Sending play_media to %s, type=%s, url=%s…",
             self._target_entity_id,
             self._target_media_type,
-            url[:80],
+            play_url[:80],
         )
         self._advancing = True
         try:
@@ -290,7 +295,7 @@ class YandexMusicPlayerEntity(MediaPlayerEntity):
                 "play_media",
                 {
                     "entity_id": self._target_entity_id,
-                    "media_content_id": url,
+                    "media_content_id": play_url,
                     "media_content_type": self._target_media_type,
                 },
                 blocking=True,

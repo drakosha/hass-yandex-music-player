@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import YandexMusicAPI
 from .const import CONF_YANDEX_STATION_ENTRY, DOMAIN, YANDEX_STATION_DOMAIN
+from .proxy import async_register_proxy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "quasar": quasar,
     }
 
+    async_register_proxy(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _LOGGER.info(
