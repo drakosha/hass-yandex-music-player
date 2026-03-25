@@ -175,8 +175,21 @@ class YandexMusicAPI:
         try:
             likes = await self.client.users_likes_albums()
             if not likes:
+                _LOGGER.debug("users_likes_albums returned empty")
                 return []
-            album_ids = [la.album.id if hasattr(la, 'album') and la.album else la.id for la in likes[:50]]
+            _LOGGER.debug(
+                "Liked albums: %d items, first=%s",
+                len(likes),
+                type(likes[0]).__name__,
+            )
+            album_ids = []
+            for la in likes[:50]:
+                album = getattr(la, "album", None)
+                aid = getattr(album, "id", None) if album else getattr(la, "id", None)
+                if aid:
+                    album_ids.append(aid)
+            if not album_ids:
+                return []
             albums = await self.client.albums(album_ids)
             return albums or []
         except Exception:
@@ -202,8 +215,30 @@ class YandexMusicAPI:
         try:
             likes = await self.client.users_likes_artists()
             if not likes:
+                _LOGGER.debug("users_likes_artists returned empty")
                 return []
-            return [la.artist if hasattr(la, 'artist') and la.artist else la for la in likes[:50]]
+            _LOGGER.debug(
+                "Liked artists: %d items, first=%s",
+                len(likes),
+                type(likes[0]).__name__,
+            )
+            artists = []
+            for la in likes[:50]:
+                artist = getattr(la, "artist", None)
+                if artist is None:
+                    # Object might be the artist itself
+                    artist = la
+                if hasattr(artist, "name") and artist.name:
+                    artists.append(artist)
+                elif hasattr(artist, "id"):
+                    # Minimal object — fetch full artist
+                    try:
+                        full = await self.client.artists([artist.id])
+                        if full:
+                            artists.append(full[0])
+                    except Exception:
+                        pass
+            return artists
         except Exception:
             _LOGGER.exception("Failed to get liked artists")
             return []
