@@ -5,9 +5,9 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["yandex_station"],
-  "documentation": "https://github.com/example/hass-yandex-music-player",
+  "documentation": "https://github.com/drakosha/hass-yandex-music-player",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": ["yandex-music>=2.2.0"],
-  "issue_tracker": "https://github.com/example/hass-yandex-music-player/issues"
+  "issue_tracker": "https://github.com/drakosha/hass-yandex-music-player/issues"
 }
